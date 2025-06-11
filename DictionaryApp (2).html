@@ -1,0 +1,393 @@
+<script type="text/javascript">
+        var gk_isXlsx = false;
+        var gk_xlsxFileLookup = {};
+        var gk_fileData = {};
+        function filledCell(cell) {
+          return cell !== '' && cell != null;
+        }
+        function loadFileData(filename) {
+        if (gk_isXlsx && gk_xlsxFileLookup[filename]) {
+            try {
+                var workbook = XLSX.read(gk_fileData[filename], { type: 'base64' });
+                var firstSheetName = workbook.SheetNames[0];
+                var worksheet = workbook.Sheets[firstSheetName];
+
+                // Convert sheet to JSON to filter blank rows
+                var jsonData = XLSX.utils.sheet_to_json(worksheet, { header: 1, blankrows: false, defval: '' });
+                // Filter out blank rows (rows where all cells are empty, null, or undefined)
+                var filteredData = jsonData.filter(row => row.some(filledCell));
+
+                // Heuristic to find the header row by ignoring rows with fewer filled cells than the next row
+                var headerRowIndex = filteredData.findIndex((row, index) =>
+                  row.filter(filledCell).length >= filteredData[index + 1]?.filter(filledCell).length
+                );
+                // Fallback
+                if (headerRowIndex === -1 || headerRowIndex > 25) {
+                  headerRowIndex = 0;
+                }
+
+                // Convert filtered JSON back to CSV
+                var csv = XLSX.utils.aoa_to_sheet(filteredData.slice(headerRowIndex)); // Create a new sheet from filtered array of arrays
+                csv = XLSX.utils.sheet_to_csv(csv, { header: 1 });
+                return csv;
+            } catch (e) {
+                console.error(e);
+                return "";
+            }
+        }
+        return gk_fileData[filename] || "";
+        }
+        </script><!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dictionary App</title>
+    <style>
+        :root {
+            --background-color: #f5f5f5;
+            --text-color: #333;
+            --card-background: #fff;
+            --header-background: #2c3e50;
+            --button-background: #3498db;
+            --button-hover: #2980b9;
+        }
+        .dark-mode {
+            --background-color: #333;
+            --text-color: #fff;
+            --card-background: #444;
+            --header-background: #1a1a1a;
+            --button-background: #2980b9;
+            --button-hover: #3498db;
+        }
+        * {
+            box-sizing: border-box;
+        }
+        body {
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 0;
+            background-color: var(--background-color);
+            color: var(--text-color);
+            transition: background-color 0.3s, color 0.3s;
+        }
+        header {
+            background-color: var(--header-background);
+            color: white;
+            padding: 1rem;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        header h1 {
+            margin: 0;
+            font-size: 1.5rem;
+        }
+        button {
+            background-color: var(--button-background);
+            color: white;
+            border: none;
+            padding: 0.5rem 1rem;
+            border-radius: 4px;
+            cursor: pointer;
+            transition: background-color 0.2s;
+        }
+        button:hover {
+            background-color: var(--button-hover);
+        }
+        main {
+            max-width: 1200px;
+            margin: 2rem auto;
+            padding: 0 1rem;
+            display: flex;
+            flex-direction: column;
+            gap: 2rem;
+        }
+        #dashboard, #graphs {
+            background-color: var(--card-background);
+            padding: 1.5rem;
+            border-radius: 8px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+            transition: background-color 0.3s;
+        }
+        #entries-list {
+            margin-top: 1rem;
+        }
+        .entry {
+            padding: 1rem;
+            border-bottom: 1px solid #eee;
+            transition: background-color 0.3s;
+        }
+        .entry:last-child {
+            border-bottom: none;
+        }
+        .entry strong {
+            color: var(--header-background);
+        }
+        #sort-options {
+            margin-top: 1rem;
+        }
+        #sort-select {
+            padding: 0.5rem;
+            border-radius: 4px;
+            border: 1px solid #ddd;
+            background-color: var(--card-background);
+            color: var(--text-color);
+        }
+        .modal {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0,0,0,0.5);
+            z-index: 1000;
+        }
+        .modal-content {
+            background-color: var(--card-background);
+            width: 90%;
+            max-width: 500px;
+            margin: 10% auto;
+            padding: 2rem;
+            border-radius: 8px;
+            position: relative;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+            transition: background-color 0.3s;
+        }
+        .close {
+            position: absolute;
+            top: 10px;
+            right: 15px;
+            font-size: 1.5rem;
+            color: #777;
+            cursor: pointer;
+        }
+        .close:hover {
+            color: #333;
+        }
+        #add-entry-form label {
+            display: block;
+            margin: 0.5rem 0 0.2rem;
+        }
+        #add-entry-form input,
+        #add-entry-form textarea {
+            width: 100%;
+            padding: 0.5rem;
+            margin-bottom: 1rem;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            font-size: 1rem;
+            background-color: var(--card-background);
+            color: var(--text-color);
+        }
+        #add-entry-form textarea {
+            resize: vertical;
+            height: 100px;
+        }
+        @media (max-width: 768px) {
+            main {
+                margin: 1rem;
+            }
+            header h1 {
+                font-size: 1.2rem;
+            }
+            button {
+                padding: 0.4rem 0.8rem;
+            }
+        }
+    </style>
+</head>
+<body>
+    <header>
+        <h1>Dictionary App</h1>
+        <button id="dark-mode-toggle">Toggle Dark Mode</button>
+    </header>
+    <main>
+        <section id="dashboard">
+            <h2>Entries</h2>
+            <button id="add-entry-btn">Add Entry</button>
+            <div id="entries-list"></div>
+            <div id="sort-options">
+                <label for="sort-select">Sort by: </label>
+                <select id="sort-select">
+                    <option value="word-asc">Word (A-Z)</option>
+                    <option value="word-desc">Word (Z-A)</option>
+                </select>
+            </div>
+        </section>
+        <section id="graphs">
+            <h2>Entries by Date</h2>
+            <canvas id="entries-chart"></canvas>
+        </section>
+    </main>
+    <div id="modal" class="modal">
+        <div class="modal-content">
+            <span class="close">×</span>
+            <h2>Add New Entry</h2>
+            <form id="add-entry-form">
+                <label for="word">Word:</label>
+                <input type="text" id="word" required>
+                <label for="meaning">Meaning:</label>
+                <textarea id="meaning" required></textarea>
+                <button type="submit">Save</button>
+            </form>
+        </div>
+    </div>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script>
+        const SUPABASE_URL = 'https://cajhtgsrxcklatekeopx.supabase.co';
+        const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImNhamh0Z3NyeGNrbGF0ZWtlb3B4Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDk2MTg1NjUsImV4cCI6MjA2NTE5NDU2NX0.WSpYwfFrBfRz0VD0McIuEo-AphMnAcNRNvg4gGWpy00';
+        const TABLE_NAME = 'entries';
+
+        const modal = document.getElementById('modal');
+        const addEntryBtn = document.getElementById('add-entry-btn');
+        const closeBtn = document.querySelector('.close');
+        const addEntryForm = document.getElementById('add-entry-form');
+        const sortSelect = document.getElementById('sort-select');
+        const darkModeToggle = document.getElementById('dark-mode-toggle');
+        let chart;
+
+        // Dark mode toggle
+        darkModeToggle.onclick = () => {
+            document.body.classList.toggle('dark-mode');
+            localStorage.setItem('darkMode', document.body.classList.contains('dark-mode'));
+        };
+
+        // Modal controls
+        addEntryBtn.onclick = () => modal.style.display = 'block';
+        closeBtn.onclick = () => modal.style.display = 'none';
+        window.onclick = (event) => {
+            if (event.target === modal) modal.style.display = 'none';
+        };
+
+        // Form submission
+        addEntryForm.onsubmit = async (event) => {
+            event.preventDefault();
+            const word = document.getElementById('word').value.trim();
+            const meaning = document.getElementById('meaning').value.trim();
+            if (word && meaning) {
+                const entry = {
+                    word,
+                    meaning,
+                    date: new Date().toISOString().split('T')[0]
+                };
+                await saveEntry(entry);
+                modal.style.display = 'none';
+                addEntryForm.reset();
+                await displayEntries();
+                updateGraph();
+            }
+        };
+
+        // Sorting
+        sortSelect.onchange = () => displayEntries();
+
+        // API functions
+        async function saveEntry(entry) {
+            const response = await fetch(`${SUPABASE_URL}/rest/v1/${TABLE_NAME}`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'apikey': SUPABASE_ANON_KEY,
+                    'Authorization': `Bearer ${SUPABASE_ANON_KEY}`
+                },
+                body: JSON.stringify(entry)
+            });
+            if (!response.ok) {
+                console.error('Error saving entry:', response.statusText);
+            }
+        }
+
+        async function getEntries() {
+            const response = await fetch(`${SUPABASE_URL}/rest/v1/${TABLE_NAME}?select=*`, {
+                headers: {
+                    'apikey': SUPABASE_ANON_KEY,
+                    'Authorization': `Bearer ${SUPABASE_ANON_KEY}`
+                }
+            });
+            if (response.ok) {
+                return await response.json();
+            } else {
+                console.error('Error fetching entries:', response.statusText);
+                return [];
+            }
+        }
+
+        // Display entries
+        async function displayEntries() {
+            const entriesList = document.getElementById('entries-list');
+            let entries = await getEntries();
+            const sortBy = sortSelect.value;
+            if (sortBy === 'word-asc') {
+                entries.sort((a, b) => a.word.localeCompare(b.word));
+            } else if (sortBy === 'word-desc') {
+                entries.sort((a, b) => b.word.localeCompare(a.word));
+            }
+            entriesList.innerHTML = '';
+            if (entries.length === 0) {
+                entriesList.innerHTML = '<p>No entries yet.</p>';
+            } else {
+                entries.forEach(entry => {
+                    const div = document.createElement('div');
+                    div.className = 'entry';
+                    div.innerHTML = `<strong>${entry.word}</strong>: ${entry.meaning} <small>(Added on ${formatDate(entry.date)})</small>`;
+                    entriesList.appendChild(div);
+                });
+            }
+        }
+
+        // Format date for display
+        function formatDate(dateStr) {
+            const date = new Date(dateStr);
+            return date.toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
+        }
+
+        // Update graph
+        async function updateGraph() {
+            const entries = await getEntries();
+            const dateCounts = {};
+            entries.forEach(entry => {
+                dateCounts[entry.date] = (dateCounts[entry.date] || 0) + 1;
+            });
+            const labels = Object.keys(dateCounts).sort();
+            const data = labels.map(label => dateCounts[label]);
+            const formattedLabels = labels.map(label => formatDate(label));
+
+            const ctx = document.getElementById('entries-chart').getContext('2d');
+            if (chart) chart.destroy();
+            chart = new Chart(ctx, {
+                type: 'bar',
+                data: {
+                    labels: formattedLabels,
+                    datasets: [{
+                        label: 'Entries Added',
+                        data,
+                        backgroundColor: 'rgba(52, 152, 219, 0.5)',
+                        borderColor: 'rgba(52, 152, 219, 1)',
+                        borderWidth: 1
+                    }]
+                },
+                options: {
+                    scales: {
+                        y: { beginAtZero: true, ticks: { stepSize: 1 } }
+                    },
+                    plugins: {
+                        legend: { display: true }
+                    }
+                }
+            });
+        }
+
+        // Initialize
+        document.addEventListener('DOMContentLoaded', async () => {
+            await displayEntries();
+            updateGraph();
+            if (localStorage.getItem('darkMode') === 'true') {
+                document.body.classList.add('dark-mode');
+            }
+        });
+    </script>
+</body>
+</html>
